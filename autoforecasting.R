@@ -90,62 +90,96 @@ process_model_file <- function(data.model){
   Y <- do.call(rbind,lapply(data.model,function(x){x$y}))
   list(X=X,Y=Y)
 }
-get_x <- function(x,i,p,h){
+get_x <- function(x,i,p){
   x <- t(x[(1:p)-1+i,,drop=F])
   x
+}
+as.n <- function(x){
+  as.numeric(paste(x))
+}
+pred <- function(x,model){
+  x[,ncol(x)] * exp(model %>% predict(x))
 }
 
 ############################
 # Validation
 ############################
 
-sel <- 1
 p <- 8
 h <- 1
+mfile <- lapply(1:(length(datemap)-p),get_model_file,h=h,p=p,x=data.model)
 
-autoforecasting <- function(sel,p=8,h=1){
-  print(paste(sel,Sys.time()))
-  mfile <- lapply(1:(length(datemap)-p),get_model_file,h=h,p=p,x=data.model)
-  mfile <- mfile[1:(length(mfile)-sel)]
-  X <- do.call(rbind,lapply(mfile,function(x){x$x}))
-  Y <- do.call(rbind,lapply(mfile,function(x){x$y}))
-  dims <- c(32,16,8)
-  models <- rep('sigmoid',4)
-  e.input <- layer_input(shape=ncol(X))
-  e.layer <- layer_dense(e.input,dims[1],activation=models[1])
-  l.layer <- layer_dense(e.layer,dims[2],activation=models[2])
-  d.layer <- layer_dense(units=dims[3],activation=models[3])
-  d.output <- layer_dense(units=ncol(Y),activation=models[4])
-  d.input <- layer_input(shape=dims[3])
-  model <- keras_model(e.input,d.output(d.layer(l.layer)))
-  model %>% compile(
-    loss = "mean_squared_error", 
-    optimizer = "adam",
-    metrics = c('mae')
-  )
-  system.time(history <- model %>% fit(
-    x = X, 
-    y = Y,
-    batch = 128,
-    epochs = 5000,
-    verbose = 0
-  ))
-  Y.fit <- sapply((9:29)-8,function(i){
-    temp <- get_x(data.model,i,p,h)
-    temp <- temp[,ncol(temp)] * exp((model %>% predict(temp)))
-    sum(temp)
-  }) * data.model.max
-  Y.actual <- rowSums(data.model)[-1:-8] * data.model.max
-  rlt <- cbind(date=datemap[-1:-8], actual = Y.actual, fit = Y.fit, error = Y.fit/Y.actual-1)
-  list(sel=sel,p=p,h=h,history=history,model=model,rlt=rlt)
+sel <- 1
+dims <- c(32,16,6)
+activations <- rep('sigmoid',4)
+drops <- rep(0,3)
+
+autoforecasting <- function(sel,p,h,dims,activations,drops,mfile){
+    print(paste('Model Intialized',Sys.time()))
+    args <- sapply(list(sel=sel,p=p,h=h,dims=dims,activations=activations,drops=drops),
+                   paste,collapse=',') %>% rbind %>% as.data.frame
+    print(t(args))
+    mfile <- mfile[1:(length(mfile)-sel)]
+    X <- do.call(rbind,lapply(mfile,function(x){x$x}))
+    Y <- do.call(rbind,lapply(mfile,function(x){x$y}))
+    model <- keras_model_sequential() 
+    model %>% 
+      layer_dense(units=dims[1],activation=activations[1],input_shape=ncol(X)) %>%
+      layer_dropout(rate=drops[1]) %>%
+      layer_dense(units=dims[2],activation=activations[2]) %>% 
+      layer_dropout(rate=drops[2]) %>%
+      layer_dense(units=dims[3],activation=activations[3]) %>%
+      layer_dropout(rate=drops[3]) %>%
+      layer_dense(units=ncol(Y),activation=activations[4])
+    model %>% compile(
+      loss = "mean_squared_error", 
+      optimizer = "adam",
+      metrics = c('mae')
+    )
+    system.time(history <- model %>% fit(
+      x = X, 
+      y = Y,
+      batch = 128,
+      epochs = 4000,
+      verbose = 0
+    ))
+    rlt <- list(args=args,model=model)
+    rlt
 }
+rlt <- lapply(rep(5:1,each=5),autoforecasting,
+              p=8,h=1,
+              dims=c(32,16,6),activations=rep('sigmoid',4),
+              drops=rep(0,3),mfile=mfile)
 
-rlt <- lapply(1:5,autoforecasting)
-t(sapply(rlt,function(i){i$rlt[nrow(i$rlt)-i$sel+1,]}))
+
+rlt.sel <- sapply(rlt,function(x){paste(t(x$args))})[1,]
+predi <- function(rlti,data.model=data.model){
+  temp <- get_x(data.model,
+                nrow(data.model)-as.n(rlti$args$p)-as.n(rlti$args$sel)+1,
+                as.n(rlti$args$p))  
+  pred(temp,rlti$model)
+}
+rlt.vali <- data.table(
+  date = 1:nrow(data.model),
+  actual = rowSums(data.model),
+  predict = c(rep(NA,nrow(data.model)-length(unique(rlt.sel))),
+              colSums(
+                sapply(unique(rlt.sel),function(i){
+                  rowMeans(sapply(rlt[which(rlt.sel==i)],predi))})))
+) %>% mutate(gap=predict/actual-1)
+rlt.vali
 
 ############################
 # Modeling
 ############################
 
-raw <- raw[,-1]
-colnames(raw) <- citymap$city[match(colnames(raw),citymap$zh_name)]
+models <- lapply(rep(0,5),autoforecasting,
+              p=8,h=1,
+              dims=c(32,16,6),activations=rep('sigmoid',4),
+              drops=rep(0,3),mfile=mfile)
+out <- data.model %>% as.matrix
+for(i in 1:10){out <- rbind(out,rowMeans(sapply(models,predi,data.model=out)))  }
+out <- rowSums(out)
+
+plot.ts(out[-1]-out[-length(out)])
+
