@@ -1,4 +1,3 @@
-
 rm(list=ls())
 library(openxlsx)
 library(data.table)
@@ -11,49 +10,75 @@ check <- function(x){data.frame(date=datemap,raw[names(raw)==x])}
 ############################
 
 setwd('/Users/wenrurumon/Documents/posdoc/wuhan')
-raw <- read.xlsx('data0209.xlsx')
+raw <- read.xlsx('data0209.xlsx',sheet='shimo')
 colnames(raw) <- c('date','province','city','confirm','heal','dead','source')
-nat <- "湖北,上海,北京,四川,广东,云南,天津,山东,河南,浙江,重庆,黑龙江,宁夏,安徽,山西,广西,江苏,江西,河北,海南,湖南,福建,贵州,辽宁,内蒙古,吉林,新疆,甘肃,陕西,青海,西藏"
+nat <- "湖北,上海,北京,四川,广东,云南,天津,山东,河南,浙江,重庆,黑龙江,宁夏,安徽,山西,广西,江苏,江西,河北,海南,湖南,福建,贵州,辽宁,内蒙古,吉林,新疆,甘肃,陕西,青海,西藏"#,台湾,香港,澳门"
 nat <- strsplit(nat,',')[[1]]
-
 raw <- mutate(raw,city=ifelse(is.na(city),province,city)) %>% 
   arrange(date,province,city) %>% 
   group_by(date,province,city) %>% 
   summarise(confirm=sum(confirm),heal=sum(heal),dead=sum(dead))
 raw$date <- sapply(strsplit(raw$date,'月|日'),function(x){as.numeric(x[1])*100+as.numeric(x[2])})
-raw <- raw %>% group_by(date,province,city) %>% summarise(
-  confirm = max(confirm), heal=max(heal),dead=max(dead)
-)
-
-raw <- raw %>% mutate(citykey=paste(date,city),provkey=paste(date,province)) 
+raw <- raw %>% 
+  filter(province%in%nat) %>% 
+  group_by(date,province) %>% 
+  summarise(confirm = sum(confirm)) %>% 
+  mutate(provkey=paste(date,province)) 
 datemap <- c(min(raw$date):131,201:max(raw$date))
-citymap <- unique(select(as.data.frame(raw),province,city))
-raw <- raw %>% group_by(provkey,date,province) %>% 
-  summarise(confirm=sum(confirm),heal=sum(heal),dead=sum(dead))
-raw.idx <- raw %>% group_by(province) %>% summarise(
-  cidx = sum(confirm), hidx = sum(heal), didx = sum(dead)
-)
-raw <- lapply(unique(citymap$province),function(i){
-  x <- (raw[match(paste(datemap,i),raw$provkey),])
+provmap <- unique(raw$province)
+raw <- data.table(date=datemap,sapply(provmap,function(i){
+  x <- raw[match(paste(datemap,i),raw$provkey),]$confirm
   x[is.na(x)] <- 0
-  x <- apply(select(as.data.frame(x),confirm,heal,dead),2,cumsum)
-  x
-})
-names(raw) <- unique(citymap$province)
-raw.cn <- sapply(raw[(names(raw)%in%nat)],function(x){x[,1]})
-
-# raw.cn <- log(raw.cn+1)
-f.cn <- max(raw.cn)*1.2
-raw.cn <- raw.cn/f.cn
+  cumsum(x)
+}))
 
 ############################
-# Model File
+# WHO data
 ############################
 
-# x <- raw.cn
-# i <- 1
-# p <- 8
-# h <- 1
+who <- read.xlsx('data0209.xlsx',sheet='who')
+citymap <- read.xlsx('data0209.xlsx',sheet='citymap')
+read.who <- function(x){
+  x <- strsplit(x,'\ ')[[1]][-1:-3]
+  x.value <- sort(which(!is.na(as.numeric(x))),decreasing=T)
+  for(i in 2:(length(x.value))){
+    if((x.value[i-1] - x.value[i])==1){
+      x[x.value[i]] <- paste0(x[x.value[i]],x[x.value[i-1]])
+      x[x.value[i-1]] <- ''
+    }
+  }
+  x <- x[x!='']
+  x.value <- sort(which(is.na(as.numeric(x))),decreasing=T)
+  for(i in 2:(length(x.value))){
+    if((x.value[i-1] - x.value[i])==1){
+      x[x.value[i]] <- paste0(x[x.value[i]],'_',x[x.value[i-1]])
+      x[x.value[i-1]] <- ''
+    }
+  }
+  x <- t(matrix(x[x!=''],2))
+  x <- data.table(city=tolower(x[,1]),confirm=as.numeric(x[,2]))
+  x <- merge(x,citymap,by='city') %>% select(city=zh_name,confirm)
+  rlt <- x$confirm
+  names(rlt) <- x$city
+  rlt
+}
+data.who <- sapply(who[,2],read.who)
+data.who <- as.data.table(t(data.who[match(colnames(raw),rownames(data.who)),]))
+colnames(data.who)[1] <- 'date'
+data.who[,1] <- paste0('who',who[,1])
+raw <- rbind(filter(raw,date<206),data.who)
+
+data.model <- raw[,-1]
+data.model.max <- max(data.model)*1.2 
+data.model <- data.model / data.model.max
+
+############################
+# Data Setup
+############################
+
+p <- 8
+h <- 1
+
 get_model_file <- function(x,i,p,h){
   y <- t(x[1:h-1+p+i,,drop=F])
   x <- t(x[(1:p)-1+i,,drop=F])
@@ -69,22 +94,16 @@ process_model_file <- function(data.model){
   Y <- do.call(rbind,lapply(data.model,function(x){x$y}))
   list(X=X,Y=Y)
 }
+mfile <- lapply(1:(length(datemap)-p),get_model_file,h=h,p=p,x=data.model)
+mfile <- mfile[1:(length(mfile)-2)]
 
 ############################
-# Modeling China
+# Modeling
 ############################
 
-#China by city
+X <- do.call(rbind,lapply(mfile,function(x){x$x}))
+Y <- do.call(rbind,lapply(mfile,function(x){x$y}))
 
-p <- 8
-h <- 1
-train.cn <- lapply(1:(length(datemap)-p),get_model_file,h=h,p=p,x=raw.cn) 
-# w <- c(1:18,0,0,0)
-w <- c(rep(1,18),0,0,0)
-train.cn <- rep(train.cn,w) %>% process_model_file()
-
-X <- train.cn$X
-Y <- train.cn$Y
 dims <- c(32,16,4)
 models <- rep('sigmoid',4)
 e.input <- layer_input(shape=ncol(X))
@@ -105,20 +124,18 @@ system.time(history <- model %>% fit(
   epochs = 4000,
   verbose = 2
 ))
-
 get_x <- function(x,i,p,h){
   x <- t(x[(1:p)-1+i,,drop=F])
   x
 }
 
 Y.fit <- sapply((9:29)-8,function(i){
-    temp <- get_x(raw.cn,i,p,h)
-    temp <- temp[,ncol(temp)] * exp((model %>% predict(temp)))
-    # temp <- temp[,ncol(temp)] * ((model %>% predict(temp))+1)
-    # temp <- model %>% predict(temp)
-    sum(temp)
-  }) * f.cn
-Y.actual <- rowSums(raw.cn)[-1:-8] * f.cn
-cbind(actual = Y.actual, fit = Y.fit, error = Y.fit/Y.actual-1)
-
-
+  temp <- get_x(data.model,i,p,h)
+  temp <- temp[,ncol(temp)] * exp((model %>% predict(temp)))
+  # temp <- temp[,ncol(temp)] * ((model %>% predict(temp))+1)
+  # temp <- model %>% predict(temp)
+  sum(temp)
+}) * data.model.max
+Y.actual <- rowSums(data.model)[-1:-8] * data.model.max
+rlt <- cbind(date=datemap[-1:-8], actual = Y.actual, fit = Y.fit, error = Y.fit/Y.actual-1)
+rlt
