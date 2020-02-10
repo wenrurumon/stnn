@@ -65,11 +65,12 @@ read.who <- function(x){
 data.who <- sapply(who[,2],read.who)
 data.who <- as.data.table(t(data.who[match(colnames(raw),rownames(data.who)),]))
 colnames(data.who)[1] <- 'date'
-data.who[,1] <- paste0('who',who[,1])
+data.who[,1] <- as.numeric(paste0(who[,1]))
 raw <- rbind(filter(raw,date<206),data.who)
-data.model <- raw[,-1]
-data.model.max <- max(data.model)*3
-data.model <- data.model / data.model.max
+Y.actual <- raw[,-1]
+
+#Process data model
+Y.model <- apply(Y.actual,2,diff)
 
 ############################
 # Data Setup
@@ -78,108 +79,130 @@ data.model <- data.model / data.model.max
 get_model_file <- function(x,i,p,h){
   y <- t(x[1:h-1+p+i,,drop=F])
   x <- t(x[(1:p)-1+i,,drop=F])
-  y <- y/x[,ncol(x)]
-  y[is.na(y)] <- 1
-  y[is.infinite(y)] <- 1
-  y <- log(y)
-  # y <- y-1
-  list(x=x,y=y)
+  f <- rowMeans(x)
+  y <- y/f; y[is.na(y)] <- 0; y[y==Inf] <- 1
+  x <- x/f; x[is.na(x)] <- 0
+  list(x=x,y=y,f=f)
 }
-process_model_file <- function(data.model){
-  X <- do.call(rbind,lapply(data.model,function(x){x$x}))
-  Y <- do.call(rbind,lapply(data.model,function(x){x$y}))
+process_model_file <- function(x){
+  X <- do.call(rbind,lapply(x,function(x){x$x}))
+  Y <- do.call(rbind,lapply(x,function(x){x$y}))
   list(X=X,Y=Y)
 }
 get_x <- function(x,i,p){
   x <- t(x[(1:p)-1+i,,drop=F])
-  x
+  f <- rowMeans(x)
+  x <- x/f
+  x[is.na(x)] <- 0
+  list(x=x,f=f)
 }
 as.n <- function(x){
   as.numeric(paste(x))
 }
 pred <- function(x,model){
-  x[,ncol(x)] * exp(model %>% predict(x))
+  model %>% predict(x)
+}
+
+############################
+# Auto Forecasting
+############################
+
+
+# dims <- c(32,6)
+# drops <- rep(0,2)
+# activations <- c('relu','relu','relu')
+
+autoforecasting <- 
+  function(X,Y,p=8,h=1,dims=c(32,4),activations=c('relu','relu','relu'),drops=rep(0,2)){
+  model <- keras_model_sequential() 
+  model %>% 
+    layer_dense(units=dims[1],activation=activations[1],input_shape=ncol(X)) %>%
+    layer_dropout(rate=drops[1]) %>%
+    layer_dense(units=dims[2],activation=activations[2]) %>% 
+    layer_dropout(rate=drops[2]) %>%
+    layer_dense(units=ncol(Y),activation=activations[3])
+  model %>% compile(
+    loss = "mean_squared_error", 
+    optimizer = "adam",
+    metrics = c('mae')
+  )
+  system.time(history <- model %>% fit(
+    x = X, 
+    y = Y,
+    batch = 128,
+    epochs = 4000,
+    verbose = 0
+  ))
+  model
 }
 
 ############################
 # Validation
-############################
+############################  
 
-p <- 8
-h <- 1
-mfile <- lapply(1:(length(datemap)-p),get_model_file,h=h,p=p,x=data.model)
+#Generate Dummy Data
 
-sel <- 1
-dims <- c(32,16,6)
-activations <- rep('sigmoid',4)
-drops <- rep(0,3)
-
-autoforecasting <- function(sel,p,h,dims,activations,drops,mfile){
-    print(paste('Model Intialized',Sys.time()))
-    args <- sapply(list(sel=sel,p=p,h=h,dims=dims,activations=activations,drops=drops),
-                   paste,collapse=',') %>% rbind %>% as.data.frame
-    print(t(args))
-    mfile <- mfile[1:(length(mfile)-sel)]
-    X <- do.call(rbind,lapply(mfile,function(x){x$x}))
-    Y <- do.call(rbind,lapply(mfile,function(x){x$y}))
-    model <- keras_model_sequential() 
-    model %>% 
-      layer_dense(units=dims[1],activation=activations[1],input_shape=ncol(X)) %>%
-      layer_dropout(rate=drops[1]) %>%
-      layer_dense(units=dims[2],activation=activations[2]) %>% 
-      layer_dropout(rate=drops[2]) %>%
-      layer_dense(units=dims[3],activation=activations[3]) %>%
-      layer_dropout(rate=drops[3]) %>%
-      layer_dense(units=ncol(Y),activation=activations[4])
-    model %>% compile(
-      loss = "mean_squared_error", 
-      optimizer = "adam",
-      metrics = c('mae')
-    )
-    system.time(history <- model %>% fit(
-      x = X, 
-      y = Y,
-      batch = 128,
-      epochs = 4000,
-      verbose = 0
-    ))
-    rlt <- list(args=args,model=model)
-    rlt
+dummy_data <- function(sel,p=8,h=1,w=NULL,x=Y.model){
+  # sel <- 3; p <- 8; h <- 1; w <- NULL; x <- Y.model
+  mfile <- lapply(1:(nrow(x)-p-h+1),get_model_file,h=h,p=p,x=x)
+  if(is.null(w)){
+    w <- rep(1:2,each=6)
+    w <- c(w,rep(3,length(mfile)-length(w)-sel))
+  }
+  X <- do.call(rbind,
+               lapply(rep(mfile[1:(length(mfile)-sel)],w),
+                      function(x){x$x}
+               )
+  )
+  Y <- do.call(rbind,
+               lapply(rep(mfile[1:(length(mfile)-sel)],w),
+                      function(x){x$y}
+               )
+  )
+  list(X=X,Y=Y)
 }
-rlt <- lapply(rep(5:1,each=5),autoforecasting,
-              p=8,h=1,
-              dims=c(32,16,6),activations=rep('sigmoid',4),
-              drops=rep(0,3),mfile=mfile)
+sel <- rep(1:3,each=5)
+dummies <- lapply(sel,dummy_data,p=8,h=1,x=Y.model)
 
+#Auto Forecasting Modeling
 
-rlt.sel <- sapply(rlt,function(x){paste(t(x$args))})[1,]
-predi <- function(rlti,data.model=data.model){
-  temp <- get_x(data.model,
-                nrow(data.model)-as.n(rlti$args$p)-as.n(rlti$args$sel)+1,
-                as.n(rlti$args$p))  
-  pred(temp,rlti$model)
+j <- 0
+test <- lapply(dummies,function(d){
+  print(paste(j<<-j+1,Sys.time()))
+  autoforecasting(d$X,d$Y,p=8,h=1,dims=c(32,4),activations=rep('relu',3),drops=rep(0,2))
+})
+
+#####
+
+Xs <- lapply(1:22,get_x,x=Y.model,p=8)
+Y.fits <- sapply(test,function(rlti){
+  sapply(Xs,function(xi){
+    sum((rlti %>% predict(xi$x))*xi$f)
+  })
+})
+
+for(i in 1:5){
+  temp <- Y.fits[,1:5+(i-1)*5]
+  for(j in 1:((nrow(temp)-(i-1)))){
+    temp[j,] <- temp[j,] + rowSums(Y.actual)[-1:-7][j]
+  }
+  if(i>1){
+    for(j in (nrow(temp)-(i-2)):(nrow(temp))){
+      temp[j,] <- temp[j-1,]+temp[j,]
+    }
+  }
+  Y.fits[,1:5+(i-1)*5] <- temp
 }
-rlt.vali <- data.table(
-  date = 1:nrow(data.model),
-  actual = rowSums(data.model),
-  predict = c(rep(NA,nrow(data.model)-length(unique(rlt.sel))),
-              colSums(
-                sapply(unique(rlt.sel),function(i){
-                  rowMeans(sapply(rlt[which(rlt.sel==i)],predi))})))
-) %>% mutate(gap=predict/actual-1)
-rlt.vali
+Y.fits <- cbind(raw$date[-1:-8]
+                ,rowMeans(Y.fits[,1:5])/rowSums(Y.actual[-1:-8])-1
+                ,rowMeans(Y.fits[,6:10])/rowSums(Y.actual[-1:-8])-1
+                ,rowMeans( Y.fits[,11:15])/rowSums(Y.actual[-1:-8])-1
+                ,rowMeans( Y.fits[,16:20])/rowSums(Y.actual[-1:-8])-1
+                ,rowMeans( Y.fits[,21:25])/rowSums(Y.actual[-1:-8])-1
+                )
+colnames(Y.fits) <- c('date',paste0('fits',1:5))
+write.csv(Y.fits,'validation_0209.csv')
+                
+######
 
-############################
-# Modeling
-############################
-
-models <- lapply(rep(0,5),autoforecasting,
-              p=8,h=1,
-              dims=c(32,16,6),activations=rep('sigmoid',4),
-              drops=rep(0,3),mfile=mfile)
-out <- data.model %>% as.matrix
-for(i in 1:10){out <- rbind(out,rowMeans(sapply(models,predi,data.model=out)))  }
-out <- rowSums(out)
-
-plot.ts(out[-1]-out[-length(out)])
 
