@@ -161,7 +161,7 @@ dummy_data <- function(sel,p=8,h=1,w=NULL,x=Y.model){
   )
   list(X=X,Y=Y)
 }
-sel <- rep(1:3,each=5)
+sel <- rep(1:5,each=5)
 dummies <- lapply(sel,dummy_data,p=8,h=1,x=Y.model)
 
 #Auto Forecasting Modeling
@@ -174,12 +174,13 @@ test <- lapply(dummies,function(d){
 
 #####
 
-Xs <- lapply(1:22,get_x,x=Y.model,p=8)
+Xs <- lapply(1:(nrow(Y.actual)-8),get_x,x=Y.model,p=8)
 Y.fits <- sapply(test,function(rlti){
   sapply(Xs,function(xi){
     sum((rlti %>% predict(xi$x))*xi$f)
   })
 })
+Y.fits[,colSums(Y.fits)==0] <- NA
 
 for(i in 1:5){
   temp <- Y.fits[,1:5+(i-1)*5]
@@ -193,16 +194,54 @@ for(i in 1:5){
   }
   Y.fits[,1:5+(i-1)*5] <- temp
 }
-Y.fits <- cbind(raw$date[-1:-8]
-                ,rowMeans(Y.fits[,1:5])/rowSums(Y.actual[-1:-8])-1
-                ,rowMeans(Y.fits[,6:10])/rowSums(Y.actual[-1:-8])-1
-                ,rowMeans( Y.fits[,11:15])/rowSums(Y.actual[-1:-8])-1
-                ,rowMeans( Y.fits[,16:20])/rowSums(Y.actual[-1:-8])-1
-                ,rowMeans( Y.fits[,21:25])/rowSums(Y.actual[-1:-8])-1
+Y.fits <- data.frame(raw$date[-1:-8]
+                ,rowSums(Y.actual)[-1:-8]
+                ,rowMeans(Y.fits[,1:5],na.rm=T)
+                ,rowMeans(Y.fits[,6:10],na.rm=T)
+                ,rowMeans( Y.fits[,11:15],na.rm=T)
+                ,rowMeans( Y.fits[,16:20],na.rm=T)
+                ,rowMeans( Y.fits[,21:25],na.rm=T)
                 )
-colnames(Y.fits) <- c('date',paste0('fits',1:5))
-write.csv(Y.fits,'validation_0209.csv')
+Y.fits <- cbind(Y.fits,Y.fits[,-1:-2]/Y.fits[,2]-1)
+colnames(Y.fits) <- c('date','actual',paste0('fits',1:5),paste0('error',1:5))
+write.csv(Y.fits,'validation_0210.csv')
                 
 ######
 
+mfile <- dummy_data(sel=0,p=8,h=1,x=Y.model)
+mmodel <- lapply(1:5,function(i){
+  print(paste(i,Sys.time()))
+  autoforecasting(mfile$X,mfile$Y,p=8,h=1,dims=c(32,4),activation=rep('relu',3),drops=rep(0,2))
+})
+Xs <- lapply(1:(nrow(Y.actual)-8),get_x,x=Y.model,p=8)
+Y.fits <- sapply(mmodel,function(rlti){
+  sapply(Xs,function(xi){
+    sum((rlti %>% predict(xi$x))*xi$f)
+  })
+}) + rowSums(Y.actual[-1:-8,])
+cbind(rowMeans(Y.fits))
+
+######
+
+out <- cbind()
+Xi <- get_x(22,x=Y.model,p=8)
+out <- cbind(out,sapply(mmodel,function(rlti){
+  (rlti %>% predict(Xi$x)) * Xi$f
+}) %>% rowMeans)
+while(colSums(out)[ncol(out)]>0.1){
+  temp <- cbind(Xi$x*Xi$f,out[,ncol(out)])[,-1]
+  Xi <- get_x(1,x=t(temp),p=8)
+  out <- cbind(out,sapply(mmodel,function(rlti){
+    (rlti %>% predict(Xi$x)) * Xi$f
+  }) %>% rowMeans)
+}
+out <- c(rowSums(Y.model),colSums(out))
+
+plot(NA,xlim=c(0,200),ylim=c(0,4000))
+lines(1:nrow(Y.model),rowSums(Y.model))
+lines(((nrow(Y.model)+1):length(out)),(out[-1:-nrow(Y.model)]),col=2)
+
+clip <- pipe("pbcopy", "w")                       
+write.table(cbind(out), file=clip)
+close(clip)
 
