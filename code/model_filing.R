@@ -61,11 +61,4 @@ mfile <- do.call(c,lapply(unique(raw$key),function(keyi){
     proci(keyi,i,8)
   })
 }))
-mfile.w <- ceiling((sapply(mfile,function(x){x$w})+1)/14)
-mfile <- rep(mfile,mfile.w)
-mfile.x <- sapply(mfile,function(x){c(x$x,f=x$f,w=x$w)}) %>% t
-mfile.y <- sapply(mfile,function(x){c(x$y)})
-mfile.key <- do.call(rbind,lapply(mfile,function(x){select(x$log$y,date,scope,state)}))
-mfile <- data.table(mfile.key,mfile.x,y=mfile.y)
-write.csv(mfile,'mfile.csv')
-
+save(mfile,file='mfile.rda')
