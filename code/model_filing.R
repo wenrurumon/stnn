@@ -43,6 +43,17 @@ getx <- function(keyi,i,p){
   y <- filter(raw,date%in%(as.POSIXct("2020-01-10")+(p+i)*3600*24)&key==keyi)
   list(x=x,y=y)
 }
+# procx <- function(x){
+#   raw <- x
+#   y <- x$y %>% mutate(case=ifelse(case<0,0,case)) 
+#   x <- x$x %>% mutate(case=ifelse(case<0,0,case))
+#   x.dum <- mean(x$dum)
+#   f <- mean(x$case+1)
+#   w <- y$w
+#   xi <- c(x=log(x$case/f+1),d=x.dum)
+#   yi <- log(y$case/f+1)
+#   list(x=xi,y=yi,f=f,w=w,log=raw)
+# }
 procx <- function(x){
   raw <- x
   y <- x$y %>% mutate(case=ifelse(case<0,0,case)) 
@@ -50,8 +61,8 @@ procx <- function(x){
   x.dum <- mean(x$dum)
   f <- mean(x$case+1)
   w <- y$w
-  xi <- c(x=log(x$case/f+1),d=x.dum)
-  yi <- log(y$case/f+1)
+  xi <- c(x=x$case/f,d=x.dum)
+  yi <- y$case/f
   list(x=xi,y=yi,f=f,w=w,log=raw)
 }
 proci <- function(keyi,i,p,y=TRUE){
