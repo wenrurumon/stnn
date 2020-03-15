@@ -15,12 +15,16 @@ raw[[2]][,1] <- rowSums(raw[[1]])
 i <- 0
 raw <- lapply(raw,function(x){
   i <<- i+1
+  rlt1 <- melt(data.frame(date=raw.date,scope=c('china','global','usa')[i],x),id=c('date','scope'))
   x <- as.data.table(rbind(0,x))
   x <- apply(x,2,diff)
-  melt(data.frame(date=raw.date,scope=c('china','global','usa')[i],x),id=c('date','scope'))
+  rlt2 <- melt(data.frame(date=raw.date,scope=c('china','global','usa')[i],x),id=c('date','scope'))
+  list(rlt1,rlt2)
 })
-raw <- do.call(rbind,raw) %>% as.data.table
-colnames(raw) <- c('date','scope','state','case')
+raw1 <- do.call(rbind,lapply(raw,function(x){x[[1]]})) %>% as.data.table
+raw2 <- do.call(rbind,lapply(raw,function(x){x[[2]]})) %>% as.data.table
+raw <- data.table(raw2,acase=raw1$value)
+colnames(raw) <- c('date','scope','state','case','acase')
 raw <- raw %>% mutate(
   dum = ifelse((state=='china'|scope=='china')&date>='2020-01-23',1,0),
   scope = toupper(scope), state = toupper(state),
@@ -62,3 +66,4 @@ mfile <- do.call(c,lapply(unique(raw$key),function(keyi){
   })
 }))
 save(mfile,file='mfile.rda')
+
