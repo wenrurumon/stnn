@@ -23,6 +23,7 @@ names(raw) <- sapply(raw,function(x){x$state})
 raw.global <- sapply(raw,function(x){x$confirmed})
 raw.china <- raw1[,-1]
 raw.usa <- read.csv('usa.csv')[,-1:-2]
+raw.usa <- apply(raw.usa,2,cumsum)
 
 raw.date <- as.POSIXct( "2020-01-20") + 3600*24*1:length(1:nrow(raw.global))
 raw.global <- data.frame(date=raw.date,raw.global)
@@ -36,4 +37,3 @@ raw.china <- data.frame(date=raw.date,raw.china)
 write.csv(raw.usa,'model_usa.csv')
 write.csv(raw.china,'model_china.csv')
 write.csv(raw.global,'model_global.csv')
-
