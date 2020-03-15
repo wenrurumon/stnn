@@ -65,5 +65,4 @@ mfile <- do.call(c,lapply(unique(raw$key),function(keyi){
     proci(keyi,i,8)
   })
 }))
-save(mfile,file='mfile.rda')
-
+save(raw,mfile,file='mfile.rda')
