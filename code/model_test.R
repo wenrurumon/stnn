@@ -184,18 +184,27 @@ for(i in 1:5){keras::save_model_hdf5(model.test[[i]]$model,paste0('/Users/wenrur
 #Prediction
 
 temp <- filter(raw,scope=='USA')
-temp <- filter(temp,date>max(temp$date)-8*3600*24)
 for(i in 1:100){
   print(i)
   tempi <- refreshi(temp,d=1)
   temp <- rbind(temp,tempi)
   tail(temp)
   x <- temp %>% group_by(date) %>% summarise(x=sum(acase))
-  plot.ts(x$x)
+  plot.ts(x$x,col=2); lines((filter(raw,scope=='USA')%>%group_by(date)%>%summarise(x=sum(acase)))$x)
 }
+temp1 <- temp
 
-unique(temp$state)
-
-plot.ts(filter(temp,state=='AL')$case)
-plot.ts((temp %>% group_by(date) %>% summarise(case=sum(case)))$case[1:7])
-
+temp <- filter(raw,scope=='USA')
+for(i in 1:100){
+  print(i)
+  for(i < 7){
+    tempi <- refreshi(temp,d=0)
+  } else {
+    tempi <- refresh(temp,d=1)
+  }
+  temp <- rbind(temp,tempi)
+  tail(temp)
+  x <- temp %>% group_by(date) %>% summarise(x=sum(acase))
+  plot.ts(x$x,col=2); lines((filter(raw,scope=='USA')%>%group_by(date)%>%summarise(x=sum(acase)))$x)
+}
+temp2 <- temp
