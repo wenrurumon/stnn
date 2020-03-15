@@ -53,6 +53,7 @@ refreshi <- function(temp,d=0){
     y$log$case <- y$y
     y$log$acase <- y$log$acase+y$log$case
     y$log$dum <- d
+    y$log$w <- y$log$w+1
     y$log
   }))
 }
@@ -107,9 +108,33 @@ model.test<- lapply(
 
 temp <- filter(raw,scope=='USA')
 temp <- filter(temp,date>max(temp$date)-8*3600*24)
-for(i in 1:300){
-  print(i)
-  tempi <- refreshi(temp)
+for(i in 1:200){
+  # print(i)
+  tempi <- refreshi(temp,d=0)
   temp <- rbind(temp,tempi)
 }
+temp1 <- temp
+x <- temp %>% group_by(date) %>% summarise(x=sum(acase))
+plot.ts(x$x)
 
+temp <- filter(raw,scope=='USA')
+temp <- filter(temp,date>max(temp$date)-8*3600*24)
+for(i in 1:200){
+  # print(i)
+  tempi <- refreshi(temp,d=ifelse(i>7,1,0))
+  temp <- rbind(temp,tempi)
+}
+temp2 <- temp
+x <- temp %>% group_by(date) %>% summarise(x=sum(acase))
+plot.ts(x$x)
+
+temp <- filter(raw,scope=='USA')
+temp <- filter(temp,date>max(temp$date)-8*3600*24)
+for(i in 1:200){
+  # print(i)
+  tempi <- refreshi(temp,d=ifelse(i>28,1,0))
+  temp <- rbind(temp,tempi)
+}
+temp3 <- temp
+x <- temp %>% group_by(date) %>% summarise(x=sum(acase))
+plot.ts(x$x)
