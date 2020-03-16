@@ -152,18 +152,18 @@ mfile.y <- cbind(y=sapply(mfile,function(x){c(x$y)}))
 
 #Modeling
 
-# model.test<- lapply(
-# paste0('/Users/wenrurumon/Documents/posdoc/wuhan/model/test_',1:5,'.model'),
-# function(x){list(model=keras::load_model_hdf5(x))})
+model.test<- lapply(
+paste0('/Users/wenrurumon/Documents/posdoc/wuhan/model/test_',1:5,'.model'),
+function(x){list(model=keras::load_model_hdf5(x))})
 
-model.test <- lapply(1:5,function(i){
-  print(paste(i,Sys.time()))
-  MSAE(
-    X=mfile.x,Y=mfile.y,
-    dims=c(16,4),activations=c('relu','relu'),
-    batch=128,epochs=1000,verbose=0)
-})
-for(i in 1:5){keras::save_model_hdf5(model.test[[i]]$model,paste0('/Users/wenrurumon/Documents/posdoc/wuhan/model/test2_',i,'.model'),overwrite = TRUE,include_optimizer = TRUE)}
+# model.test <- lapply(1:5,function(i){
+#   print(paste(i,Sys.time()))
+#   MSAE(
+#     X=mfile.x,Y=mfile.y,
+#     dims=c(16,4),activations=c('relu','relu'),
+#     batch=128,epochs=1000,verbose=0)
+# })
+# for(i in 1:5){keras::save_model_hdf5(model.test[[i]]$model,paste0('/Users/wenrurumon/Documents/posdoc/wuhan/model/test2_',i,'.model'),overwrite = TRUE,include_optimizer = TRUE)}
 
 #Validation Data
 
@@ -201,6 +201,8 @@ for(i in 1:300){
 }
 Sys.time()
 temp1 <- temp
+
+head(temp1 %>% filter(state=='WA'),150)
 
 temp <- filter(raw,scope=='USA')
 Sys.time()
