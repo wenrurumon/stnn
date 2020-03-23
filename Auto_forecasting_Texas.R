@@ -75,7 +75,9 @@ MSAE2 <- function(X,Y,model,batch,epochs,verbose){
 
 #plot
 
-ggstack2 <- function(temp,sel=0.75,sel2=c('IRAN','SPAIN','ITALY','GERMANY','USA','FRANCE','CHINA')){
+sel2 <- c('DALLAS','HOUSTON','SAN_ANTONIO')
+ggstack2 <- function(temp,sel=0.75,sel2=sel2){
+  colnames(temp) <- toupper(colnames(temp))
   temp <- data.table(date=as.POSIXct( "2020-01-21") + 3600*24*1:nrow(temp),temp) %>% as.data.frame
   temp <- melt(temp,id='date'); colnames(temp) <- c('date','state','case')
   if(!is.null(sel2)){
@@ -86,16 +88,17 @@ ggstack2 <- function(temp,sel=0.75,sel2=c('IRAN','SPAIN','ITALY','GERMANY','USA'
   }
   temp <- mutate(temp,state=ifelse(state%in%sel,paste(state),'OTHERS'))
   temp <- temp %>% dplyr::group_by(state,date) %>% dplyr::summarise(case=sum(case))
-  colnames(temp) <- c('State','Date','Cases')
+  colnames(temp) <- c('County','Date','Cases')
   sel <- toupper(paste(sel))
-  temp$State <- toupper(paste(temp$State))
+  temp$State <- toupper(paste(temp$County))
   temp$State <- factor(temp$State,c('OTHERS',sel[length(sel):1]))
-  # temp <- temp %>% filter(State%in%sel2)
-  ggplot2::ggplot(temp,ggplot2::aes(fill=State,y=Cases,x=Date)) + ggplot2::geom_bar(position="stack", stat="identity")
+  temp <- temp %>% filter(State%in%sel2)
+  ggplot2::ggplot(temp,ggplot2::aes(fill=County,y=Cases,x=Date)) + ggplot2::geom_bar(position="stack", stat="identity")
 }
 
-ggline2 <- function(temp,sel=0.5,sel2=c('IRAN','SPAIN','ITALY','GERMANY','USA','FRANCE','CHINA')){
-  temp <- data.table(date=as.POSIXct( "2020-01-20") + 3600*24*1:nrow(temp),temp) %>% as.data.frame
+ggline2 <- function(temp,sel=0.5,sel2=sel2){
+  colnames(temp) <- toupper(colnames(temp))
+  temp <- data.table(date=as.POSIXct( "2020-01-21") + 3600*24*1:nrow(temp),temp) %>% as.data.frame
   temp <- melt(temp,id='date'); colnames(temp) <- c('date','state','case')
   if(!is.null(sel2)){
     sel <- sel2
@@ -105,17 +108,17 @@ ggline2 <- function(temp,sel=0.5,sel2=c('IRAN','SPAIN','ITALY','GERMANY','USA','
   }
   temp <- mutate(temp,state=ifelse(state%in%sel,paste(state),'OTHERS'))
   temp <- temp %>% dplyr::group_by(state,date) %>% dplyr::summarise(case=sum(case))
-  colnames(temp) <- c('State','Date','Cases')
+  colnames(temp) <- c('County','Date','Cases')
   sel <- toupper(paste(sel))
-  temp$State <- toupper(paste(temp$State))
+  temp$State <- toupper(paste(temp$County))
   temp$State <- factor(temp$State,c('OTHERS',sel[length(sel):1]))
   temp <- temp %>% filter(State%in%sel2)
-  ggplot2::ggplot(temp,ggplot2::aes(colour=State,y=Cases,x=Date)) + ggplot2::geom_line(size=1)
+  ggplot2::ggplot(temp,ggplot2::aes(colour=County,y=Cases,x=Date)) + ggplot2::geom_line(size=1)
 }
 
 #todate
 todate <- function(x){
-  x <- as.POSIXct( "2020-01-20") + 3600*24*x
+  x <- as.POSIXct( "2020-01-21") + 3600*24*x
   paste(x)
 }
 
@@ -125,7 +128,21 @@ todate <- function(x){
 
 setwd('/Users/wenrurumon/Documents/posdoc/wuhan/data/github')
 x <- fread(dir(pattern='model_')[7])
-raw.c <- x[,-1] %>% as.matrix()
+# raw.c <- x[,-1] %>% as.matrix()
+raw.date <- x$V1
+
+setwd('/Users/wenrurumon/Documents/posdoc/wuhan/data/')
+x <- fread("texas321.csv")
+x <- x %>% group_by(date,metro_area) %>% dplyr::summarise(new=sum(confirmed)) %>% 
+  mutate(metro_area=ifelse(is.na(metro_area),'Others',metro_area))
+x <- sapply(unique(x$metro_area),function(i){
+  x <- filter(x,metro_area==i)[match(as.POSIXct(raw.date),as.POSIXct(filter(x,metro_area==i)$date)),]$new
+  ifelse(is.na(x),0,x)
+})
+x <- x[-nrow(x),]
+raw.c <- apply(x,2,cumsum)
+
+
 
 ############################
 # Prediction
@@ -392,28 +409,30 @@ write.csv(do.call(cbind,rlts.index),'/Users/wenrurumon/Documents/posdoc/wuhan/su
 
 #Nat Plot
 
+# sel2 <- c('IRAN','SPAIN','ITALY','GERMANY','USA','FRANCE','CHINA')
+
 grid::grid.newpage() 
 grid::pushViewport(grid::viewport(layout = grid::grid.layout(4,2))) 
 vplayout <- function(x,y){grid::viewport(layout.pos.row = x, layout.pos.col = y)} 
 
-p <- ggline2((rlts[[2]][1:150,-1]));print(p+labs(y='New Cases'), vp = vplayout(1,1))
-p <- ggline2(apply(rlts[[2]][1:150,-1],2,cumsum));print(p+labs(y='Accumulated Cases'), vp = vplayout(1,2))
-p <- ggline2((rlts[[3]][1:150,-1]));print(p+labs(y='New Cases'), vp = vplayout(2,1))
-p <- ggline2(apply(rlts[[3]][1:150,-1],2,cumsum));print(p+labs(y='Accumulated Cases'), vp = vplayout(2,2))
-p <- ggline2((rlts[[4]][1:150,-1]));print(p+labs(y='New Cases'), vp = vplayout(3,1))
-p <- ggline2(apply(rlts[[4]][1:150,-1],2,cumsum));print(p+labs(y='Accumulated Cases'), vp = vplayout(3,2))
-p <- ggline2((rlts[[5]][1:150,-1]));print(p+labs(y='New Cases'), vp = vplayout(4,1))
-p <- ggline2(apply(rlts[[5]][1:150,-1],2,cumsum));print(p+labs(y='Accumulated Cases'), vp = vplayout(4,2))
+p <- ggline2((rlts[[1]][1:150,-1]),sel2=sel2);print(p+labs(y='New Cases'), vp = vplayout(1,1))
+p <- ggline2(apply(rlts[[1]][1:150,-1],2,cumsum),sel2=sel2);print(p+labs(y='Accumulated Cases'), vp = vplayout(1,2))
+p <- ggline2((rlts[[2]][1:150,-1]),sel2=sel2);print(p+labs(y='New Cases'), vp = vplayout(2,1))
+p <- ggline2(apply(rlts[[2]][1:150,-1],2,cumsum),sel2=sel2);print(p+labs(y='Accumulated Cases'), vp = vplayout(2,2))
+p <- ggline2((rlts[[3]][1:150,-1]),sel2=sel2);print(p+labs(y='New Cases'), vp = vplayout(3,1))
+p <- ggline2(apply(rlts[[3]][1:150,-1],2,cumsum),sel2=sel2);print(p+labs(y='Accumulated Cases'), vp = vplayout(3,2))
+p <- ggline2((rlts[[4]][1:150,-1]),sel2=sel2);print(p+labs(y='New Cases'), vp = vplayout(4,1))
+p <- ggline2(apply(rlts[[4]][1:150,-1],2,cumsum),sel2=sel2);print(p+labs(y='Accumulated Cases'), vp = vplayout(4,2))
 
-write.csv(sapply(rlts[-1],function(x){x[,1]}),'/Users/wenrurumon/Documents/posdoc/wuhan/summary/temp.csv')
+write.csv(sapply(rlts[],function(x){x[,1]}),'/Users/wenrurumon/Documents/posdoc/wuhan/summary/temp.csv')
 
 grid::grid.newpage() 
 grid::pushViewport(grid::viewport(layout = grid::grid.layout(2,2)))
 vplayout <- function(x,y){grid::viewport(layout.pos.row = x, layout.pos.col = y)} 
-print(ggstack2(rlts[[2]][1:150,-1]),vp=vplayout(1,1))
-print(ggstack2(rlts[[3]][1:150,-1]),vp=vplayout(1,2))
-print(ggstack2(rlts[[4]][1:150,-1]),vp=vplayout(2,1))
-print(ggstack2(rlts[[5]][1:150,-1]),vp=vplayout(2,2))
+print(ggstack2(rlts[[1]][1:150,-1],sel2=sel2),vp=vplayout(1,1))
+print(ggstack2(rlts[[2]][1:150,-1],sel2=sel2),vp=vplayout(1,2))
+print(ggstack2(rlts[[3]][1:150,-1],sel2=sel2),vp=vplayout(2,1))
+print(ggstack2(rlts[[4]][1:150,-1],sel2=sel2),vp=vplayout(2,2))
 
 ######################
 #ARIMA
