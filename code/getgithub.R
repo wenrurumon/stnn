@@ -36,7 +36,7 @@ raw <- lapply(dir(pattern='time_series_19'),function(x){
 names(raw) <- sapply(strsplit(dir(pattern='time_series_19'),'-'),function(x){gsub('.csv','',x[3])})
 raw <- lapply(raw,as.data.frame)
 temp <- read.csv('/Users/wenrurumon/Documents/posdoc/wuhan/data/china_confirmed_315.csv')[,2:3]
-raw$Confirmed[which(raw$Confirmed$state=='Hubei'),5:27] <- temp[12:34,2]
+raw$Confirmed[which(raw$Confirmed$state=='Hubei'),1:54+4] <- temp[-1:-11,2]
 
 #By Country
 raw.country <- lapply(raw,function(x){
