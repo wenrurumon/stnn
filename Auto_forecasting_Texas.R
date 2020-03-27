@@ -132,7 +132,7 @@ x <- fread(dir(pattern='model_')[7])
 raw.date <- x$V1
 
 setwd('/Users/wenrurumon/Documents/posdoc/wuhan/data/')
-x <- fread("texas321.csv")
+x <- fread("texas324.csv")
 x <- x %>% group_by(date,metro_area) %>% dplyr::summarise(new=sum(confirmed)) %>% 
   mutate(metro_area=ifelse(is.na(metro_area),'Others',metro_area))
 x <- sapply(unique(x$metro_area),function(i){
@@ -238,7 +238,7 @@ for(i in 1:(365-nrow(Y.model))){
 }
 temp[-1:-nrow(Y.model),apply(Y.model,2,function(x){sum(x>0)<5})] <- 0
 rlts[[length(rlts)+1]] <- temp
-ggstack2(temp[1:150,],sel2=NULL)
+ggstack2(temp[1:150,],sel2=sel2)
 sum(temp)
 
 # Other Scenarios
@@ -263,7 +263,7 @@ for(i in 1:(365-nrow(Y.model))){
 }
 temp[-1:-nrow(Y.model),apply(Y.model,2,function(x){sum(x>0)<5})] <- 0
 rlts[[length(rlts)+1]] <- temp
-ggstack2(temp[1:150,],sel2=NULL)
+ggstack2(temp[1:150,],sel2=sel2)
 sum(temp)
 
 #0,0.5,1
@@ -287,7 +287,7 @@ for(i in 1:(365-nrow(Y.model))){
 }
 temp[-1:-nrow(Y.model),apply(Y.model,2,function(x){sum(x>0)<5})] <- 0
 rlts[[length(rlts)+1]] <- temp
-ggstack2(temp[1:150,],sel2=NULL)
+ggstack2(temp[1:150,],sel2=sel2)
 sum(temp)
 
 #0,0.5,0.5,0.5,1
@@ -311,7 +311,7 @@ for(i in 1:(365-nrow(Y.model))){
 }
 temp[-1:-nrow(Y.model),apply(Y.model,2,function(x){sum(x>0)<5})] <- 0
 rlts[[length(rlts)+1]] <- temp
-ggstack2(temp[1:150,],sel2=NULL)
+ggstack2(temp[1:150,],sel2=sel2)
 sum(temp)
 
 #0,0.5,0.5,0.5,0.5
@@ -335,8 +335,56 @@ for(i in 1:(365-nrow(Y.model))){
 }
 temp[-1:-nrow(Y.model),apply(Y.model,2,function(x){sum(x>0)<5})] <- 0
 rlts[[length(rlts)+1]] <- temp
-ggstack2(temp[1:150,],sel2=NULL)
+ggstack2(temp[1:150,],sel2=sel2)
 sum(temp)
+
+#1，1，1，1，0.5
+temp <- Y.model
+for(i in 1:(365-nrow(Y.model))){
+  x1 <- x2 <- x3 <- get_model_file(temp,i=nrow(temp)-7,p=8,gety=F)
+  x1$x <- cbind(x1$x,1); x1$x[rownames(x1$x)=='china',9] <- 1
+  x2$x <- cbind(x2$x,0.5); x2$x[rownames(x2$x)=='china',9] <- 1
+  x3$x <- cbind(x3$x,0); x3$x[rownames(x3$x)=='china',9] <- 1
+  x1 <- (sapply(models.pred2,function(m){m$model %>% predict(x1$x)}) * x1$f) %>% rowMeans
+  x2 <- (sapply(models.pred2,function(m){m$model %>% predict(x2$x)}) * x2$f) %>% rowMeans
+  x3 <- (sapply(models.pred2,function(m){m$model %>% predict(x3$x)}) * x3$f) %>% rowMeans
+  x1 <- ifelse(x1<0,0,x1); x2 <- ifelse(x2<x1,x1,x2); x3 <- ifelse(x3<x2,x2,x3)
+  if(i %in% 1:7){
+    temp <- rbind(temp,x2)
+  }else if(i%in%8:36){
+    temp <- rbind(temp,x1)
+  } else {
+    temp <- rbind(temp,x2)
+  }
+}
+temp[-1:-nrow(Y.model),apply(Y.model,2,function(x){sum(x>0)<5})] <- 0
+rlts[[length(rlts)+1]] <- temp
+ggstack2(temp[1:150,],sel2=sel2)
+sum(temp[,])
+
+#1，1，1，1，1,1,10.5
+temp <- Y.model
+for(i in 1:(365-nrow(Y.model))){
+  x1 <- x2 <- x3 <- get_model_file(temp,i=nrow(temp)-7,p=8,gety=F)
+  x1$x <- cbind(x1$x,1); x1$x[rownames(x1$x)=='china',9] <- 1
+  x2$x <- cbind(x2$x,0.5); x2$x[rownames(x2$x)=='china',9] <- 1
+  x3$x <- cbind(x3$x,0); x3$x[rownames(x3$x)=='china',9] <- 1
+  x1 <- (sapply(models.pred2,function(m){m$model %>% predict(x1$x)}) * x1$f) %>% rowMeans
+  x2 <- (sapply(models.pred2,function(m){m$model %>% predict(x2$x)}) * x2$f) %>% rowMeans
+  x3 <- (sapply(models.pred2,function(m){m$model %>% predict(x3$x)}) * x3$f) %>% rowMeans
+  x1 <- ifelse(x1<0,0,x1); x2 <- ifelse(x2<x1,x1,x2); x3 <- ifelse(x3<x2,x2,x3)
+  if(i %in% 1:7){
+    temp <- rbind(temp,x2)
+  }else if(i%in%8:64){
+    temp <- rbind(temp,x1)
+  } else {
+    temp <- rbind(temp,x2)
+  }
+}
+temp[-1:-nrow(Y.model),apply(Y.model,2,function(x){sum(x>0)<5})] <- 0
+rlts[[length(rlts)+1]] <- temp
+ggstack2(temp[1:150,],sel2=sel2)
+sum(temp[1:150,])
 
 #Resulting
 rlts <- lapply(rlts,function(x){floor(x)})
