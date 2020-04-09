@@ -76,7 +76,7 @@ log <- filter(raw,fact=='confirmed')
 mfile <- do.call(c,lapply(unique(log$key),function(K){
   lapply(1:(max(log$i)-8),function(I){getlog(I,K,log,8)})
 }))
-X <- sapply(mfile,function(x){c(x$x$accum/(mean(x$x$accum)+1))}) %>% t
+X <- sapply(mfile,function(x){c(x$x$accum/(mean(x$x$accum)+1),mean(x$x$d))}) %>% t
 
 e.input <- layer_input(shape=ncol(X))
 e.layer <- layer_dense(e.input,16,activation='relu')
@@ -139,8 +139,8 @@ test <- do.call(cbind,sapply(unique((filter(raw,scope=='global'))$state),functio
   as.numeric(model.d %>% predict(t(sapply(x,function(x){x$x$accum/mean(x$x$accum+1)}))))
 }))
 test <- data.frame(state=unique((filter(raw,scope=='global'))$state),
-           d=colMeans(test),t(apply(test,2,function(x) quantile(x,(1:5)/5))), case=
-           (filter(raw,scope=='global') %>% group_by(state) %>% summarise(case=sum(new)))$case) %>%
+                   d=colMeans(test),t(apply(test,2,function(x) quantile(x,(1:5)/5))), case=
+                     (filter(raw,scope=='global') %>% group_by(state) %>% summarise(case=sum(new)))$case) %>%
   arrange(desc(X100.)) %>% select(state,factor=X100.,case)
 write.csv(test,"/Users/wenrurumon/Documents/posdoc/wuhan/summary/country_index.csv")
 
