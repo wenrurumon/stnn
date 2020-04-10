@@ -31,6 +31,13 @@ for(j in 1:4){
   }
 }
 
-
-
+vplayout <- function(x,y){grid::viewport(layout.pos.row = x, layout.pos.col = y)} 
+for(j in 1:4){
+  for(i in 1:3){
+    x <- getline((j-1)*3+i)
+    print(ggplot(filter(x,Legend=='Scenario_0'),aes(y=value,x=date))+
+            geom_line(size=1)+labs(x="Date",y='Accumulated Cases(K)',title=x$country[1]),
+          vp=vplayout(j,i))
+  }
+}
 
