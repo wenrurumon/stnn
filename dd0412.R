@@ -50,7 +50,7 @@ mfile <- do.call(c,lapply(unique(log$key),function(K){
   lapply(1:(max(log$i)-8),function(I){getlog(I,K,log,8)})
 }))
 X <- (t(sapply(mfile,function(x){c(c(x$x$accum,x$y$accum)/(mean(x$x$accum)+1))})))
-Y <- cbind(sapply(mfile,function(x){x$y$d}))
+Y <- cbind(sapply(mfile,function(x){x$x$d[8]}))
 
 e.input <- layer_input(shape=ncol(X))
 e.layer <- layer_dense(e.input,16,activation='relu')
@@ -78,8 +78,9 @@ system.time(model %>% fit(x = Y,y = D,batch = 128,epochs = 1000,verbose = 0))
 model %>% fit(x = Y,y = D,batch = 128,epochs = 100,verbose = 2)
 D <- model %>% predict(Y)
 
-raw <- raw %>% mutate(d=model.d2d %>% predict(select(raw,d)%>%as.matrix()))
-raw %>% filter(scope=='global') %>% group_by(state) %>% summarise(max=max(d),mean=mean(d))
+raw <- raw %>% mutate(d=model %>% predict(select(raw,d)%>%as.matrix()))
+# write.csv(raw  %>% group_by(scope,state) %>% summarise(max=max(d),mean=mean(d)),
+#           "/Users/wenrurumon/Documents/posdoc/wuhan/summary/temp.csv")
 
 ###################################
 # Predict D
@@ -131,7 +132,8 @@ model.china <- model
 # Global Model
 ###################################
 
-log <- filter(raw,scope=='global')
+# log <- filter(raw,scope=='global')
+log <- raw
 mfile <- do.call(c,lapply(unique(log$key),function(K){
   lapply(1:(max(log$i)-8),function(I){getlog(I,K,log,8)})
 }))
@@ -155,14 +157,17 @@ models <- list(
   global = load_model_hdf5('/Users/wenrurumon/Documents/posdoc/wuhan/model/model_global.model')
 )
 
-temp <- temp1 <- filter(raw,key=='global confirmed US')
+temp <- temp1 <- filter(raw,key=='global confirmed China')
 for(i in 1:365){
   # print(i)
   tempi <- filter(temp,i>(max(temp$i)-8))
-  if(i %in% 1:1){
-    tempi.d <- max(tempi$d)+(max(tempi$d)-min(tempi$d))/8
+  if(i %in% 1:28){
+    tempi.d <- mean(tempi$d)
   } else {
-    tempi.d <- max(models$d %>% predict(matrix(c(tempi$d),nrow=1)),tempi$d)
+    tempi.d <- tempi.d+mean(diff(temp$d))
+    # tempi.d <- max(tempi$d)+(max(tempi$d)-min(tempi$d))/8
+    # tempi.d <- max(models$d %>% predict(matrix(c(tempi$d),nrow=1)),tempi$d)
+    # if(tempi.d==mean(tempi$d)){tempi.d <- tempi.d+mean(diff(temp$d))}
   }
   tempi.n <- floor((models$china %>% predict(matrix(c(tempi$new/mean(tempi$new+1),tempi.d),nrow=1)))*mean(tempi$new))
   tempi <- tempi[8,] %>% mutate(d=tempi.d,new=tempi.n,accum=accum+tempi.n,i=i+1,
