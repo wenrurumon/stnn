@@ -217,8 +217,8 @@ trate <- raw.trate
 X <- lapply(lapply(1:(nrow(pos)-8),getpos,train=T),function(x){
   list(x=cbind(x$x.pos,rowMeans(x$x.trate),
                wy=matrix((rep(1:7,each=51)==raw.weekday[which(raw.date==colnames(x$y.pos))]),nrow=51)+0
-               ),
-       f1=x$f.pos)
+  ),
+  f1=x$f.pos)
 })
 Y <- lapply(lapply(1:(nrow(pos)-8),getpos,train=T),function(x){
   list(y=cbind(x$y.pos),f1=x$f.pos)
@@ -331,15 +331,16 @@ rlt2 <- lapply(rlt,function(x){
 for(i in 1:4){rlt2[[i]] <- data.frame(scenario=i,rlt2[[i]])}
 write.csv(do.call(rbind,rlt2),"/Users/wenrurumon/Documents/posdoc/wuhan/summary/YA.csv")
 names(rlt2) <- paste0('Scenario',1:4)
+filter(do.call(rbind,rlt2),state=='TotalUS')
 
 rlt2 <- data.frame(state=rlt2[[1]]$state[-1],
                    sapply(rlt2,function(x){x$pos.end[-1]}),
                    Actual=rlt2[[1]]$pos.now[-1]) %>% mutate(
-  Scenario1 = Scenario1-Scenario2,
-  Scenario2 = Scenario2-Scenario3,
-  Scenario3 = Scenario3-Scenario4,
-  Scenario4 = Scenario4-Actual
-) %>% melt
+                     Scenario1 = Scenario1-Scenario2,
+                     Scenario2 = Scenario2-Scenario3,
+                     Scenario3 = Scenario3-Scenario4,
+                     Scenario4 = Scenario4-Actual
+                   ) %>% melt
 rlt2$variable=factor(rlt2$variable,paste(unique(rlt2$variable))[5:1])
 
 ggplot() +
