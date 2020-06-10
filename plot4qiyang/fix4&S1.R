@@ -16,10 +16,12 @@ ggplot() +
   labs(x='Date',y='Accumulated Cases (K)',colour='') + scale_x_date(date_breaks = '2 week',date_labels = '%b %d') + theme(legend.position='top') 
 
 x <- fread(dir(pattern='Table S1.csv'),header=T)
-colnames(x)[-1] <- c(0,0.7,0.5,0.3,1)
+apply(x[,-1],2,max)
+colnames(x)[-1] <- c(0,0.3,0.5,0.7,1)
 x <- x%>% melt %>% mutate(
   date=as.Date(V1),variable=paste(variable)
 )
+x$variable <- factor(x$variable,unique(x$variable))
 ggplot(data=x,aes(x=date,y=value/1000000,colour=variable)) + labs(
   x='Date',y='Cases (Million)',colour='Strength'
 ) + geom_line(size=1) + scale_x_date(date_breaks = '2 week',date_labels = '%b %d')
